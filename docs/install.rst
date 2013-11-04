@@ -12,6 +12,7 @@ pycortex relies on a large number of open source projects:
     lxml
     html5lib
     tornado
+    git-python
 
     jquery
     jquery-ui

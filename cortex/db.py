@@ -13,6 +13,8 @@ import time
 import json
 import shutil
 import warnings
+
+import git
 import numpy as np
 
 from . import options
@@ -119,6 +121,11 @@ class MaskSet(object):
     def __repr__(self):
         return "Masks: [{types}]".format(types=', '.join(self._masks.keys()))
 
+
+def _date():
+    from datetime import datetime
+    return datetime.today().strptime("%Y-%m-%d at %H:%M")
+
 class Database(object):
     """
     Database()
@@ -133,6 +140,23 @@ class Database(object):
         subjs = os.listdir(os.path.join(filestore))
         self.subjects = dict([(sname, SubjectDB(sname)) for sname in subjs])
         self.auxfile = None
+        try:
+            self.repo = git.Repo(filestore)
+            if self.repo.is_dirty():
+                self.repo.git.add(filestore)
+                self.repo.git.commit("Filestore additions on %s"%_date())
+        except git.exc.InvalidGitRepositoryError:
+            print('Initializing a git repository in your filestore...')
+            self.repo = git.Repo.init(filestore, bare=False)
+            gitignore = os.path.join(filestore, ".gitignore")
+            with open(gitignore, "w") as fp:
+                fp.write("*.vtk\n")
+                fp.write("*.npz\n")
+                fp.write("*.nii.gz\n")
+                fp.write("cache\n")
+            self.repo.git.add(os.path.join(filestore, ".gitignore"))
+            self.repo.git.add(filestore)
+            self.repo.git.commit(m='Initial commit of the database')
     
     def __repr__(self):
         subjs = ", ".join(sorted(self.subjects.keys()))
@@ -240,6 +264,7 @@ class Database(object):
         fname = os.path.join(path, "matrices.xfm")
         if os.path.exists(fname):
             jsdict = json.load(open(fname))
+            commit_msg = "Updating transform ({subj}, {xfm})".format(subj=subject, xfm=name)
         else:
             os.mkdir(path)
             if reference is None:
@@ -248,13 +273,13 @@ class Database(object):
             nib = nibabel.load(reference)
             data = nib.get_data()
             if len(data.shape) > 3:
-                import warnings
                 warnings.warn('You are importing a 4D dataset, automatically selecting the first volume as reference')
                 data = data[...,0]
             out = nibabel.Nifti1Image(data, nib.get_affine(), header=nib.get_header())
             nibabel.save(out, fpath)
 
             jsdict = dict()
+            commit_msg = "Create new transform ({subj}, {xfm})".format(subj=subject, xfm=name)
 
         nib = nibabel.load(os.path.join(path, "reference.nii.gz"))
         if xfmtype == "magnet":
@@ -269,6 +294,8 @@ class Database(object):
             raise ValueError('Refusing to change a transfrom with masks')
             
         json.dump(jsdict, open(fname, "w"), sort_keys=True, indent=4)
+        self.repo.git.add(fname)
+        self.repo.git.commit(m=commit_msg)
     
     def getXfm(self, subject, name, xfmtype="coord"):
         """Retrieves a transform from the filestore
@@ -470,5 +497,17 @@ class Database(object):
                 os.makedirs(path)
             except OSError:
                 print("Error making directory %s"%path)
+
+    def revertXfm(self, subject, xfmname):
+        fname = self.getFiles(subject)['xfmdir'].format(xfmname=xfmname)
+        revs = self.repo.git.rev_list(fname, all=True).split("\n")
+        for i, rev in enumerate(revs):
+            print("%d) %s  %s"%(i+1, rev[:8], self.repo.commit(rev).message))
+        try:
+            idx = int(raw_input("Which version would you like to revert to? "))
+            self.repo.git.checkout(rev[idx], fname)
+            self.repo.git.commit(m="Revert to older ")
+        except ValueError:
+            print('No revision selected, nothing changed...')
 
 surfs = Database()

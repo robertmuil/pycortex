@@ -10,6 +10,7 @@ import mimetypes
 import threading
 import webbrowser
 import numpy as np
+import time
 
 from tornado import web
 from .FallbackLoader import FallbackLoader
@@ -382,7 +383,7 @@ def show(data, types=("inflated",), recache=False, cmap='RdBu_r', layout=None, a
             Proxy = serve.JSProxy(self.send, "window.viewers.saveIMG")
             return Proxy("mixer.html")
 
-        def makeMovie(self, animation, filename="brainmovie%07d.png", offset=0, fps=30, size=(1920, 1080), interpolation="linear"):
+        def makeMovie(self, animation, filename="brainmovie%07d.png", offset=0, fps=30, size=(1920, 1080), interpolation="linear", connect_handler=None):
             """Renders movie frames for animation of mesh movement
 
             Makes an animation (for example, a transition between inflated and 
@@ -413,6 +414,8 @@ def show(data, types=("inflated",), recache=False, cmap='RdBu_r', layout=None, a
                 Size (in pixels) of resulting movie
             interpolation : {"linear","smoothstep","smootherstep"}
                 Interpolation method for values between keyframes.
+            connect_handler : added by rmuil to allow access to the
+                client connection. if not provided, just hardcoded sleeps.
 
             Example
             -------
@@ -445,6 +448,9 @@ def show(data, types=("inflated",), recache=False, cmap='RdBu_r', layout=None, a
                         anim.append((start, end))
 
             print(anim)
+            saveevt = None
+            if connect_handler is not None:
+              saveevt = connect_handler
             #import ipdb
             #ipdb.set_trace()
             self.resize(*size)
@@ -464,9 +470,15 @@ def show(data, types=("inflated",), recache=False, cmap='RdBu_r', layout=None, a
                             self.setState(start['state'], val.ravel().tolist())
                         else:
                             self.setState(start['state'], val)
-                saveevt.clear()
+                if saveevt is not None:
+                  saveevt.clear()
                 self.saveIMG(filename%(i+offset))
-                saveevt.wait()
+                if saveevt is not None:
+                  print ' dbg: waiting on connect...'
+                  saveevt.wait()
+                else:
+                  print ' dbg: sleeping 2 secs...'
+                  time.sleep(2.0)
 
     class PickerHandler(web.RequestHandler):
         def get(self):

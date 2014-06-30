@@ -34,3 +34,11 @@ nosetests.xml
 .mr.developer.cfg
 .project
 .pydevproject
+
+#vim
+*~
+.*.sw?
+
+#specific to this project
+cortex/formats.c
+cortex/openctm.c

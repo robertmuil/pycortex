@@ -96,7 +96,7 @@ var mriview = (function(module) {
                 curvAlpha:  { type:'f', value:1.},
                 curvScale:  { type:'f', value:.5},
                 curvLim:    { type:'f', value:.2},
-                dataAlpha:  { type:'f', value:1.0},
+                dataAlpha:  { type:'f', value:0.0},//rmuil: forced to no data
                 hatchAlpha: { type:'f', value:1.},
                 hatchColor: { type:'v3', value:new THREE.Vector3( 0,0,0 )},
                 voxlineColor:{type:'v3', value:new THREE.Vector3( 0,0,0 )},
